@@ -35,7 +35,16 @@ namespace RazFractal
 			mainForm = new MainForm();
 			mainForm.StartRender += mainForm_StartRender;
 			mainForm.StopRender += mainForm_StopRender;
+			mainForm.ConfigChanged += mainForm_ConfigChanged;
 			Application.Run(mainForm);
+		}
+
+		static void mainForm_ConfigChanged(object sender, MainForm.ConfigChangedEventArgs args)
+		{
+			stopRendering = true;
+			restart = true;
+			config = args.Config;
+			mainForm_StartRender(sender,args);
 		}
 
 		static void mainForm_StopRender(object sender, EventArgs e)
@@ -45,40 +54,41 @@ namespace RazFractal
 
 		static void mainForm_StartRender(object sender, EventArgs e)
 		{
-			var sw = new Stopwatch();
-			sw.Start();
-			DoRender();
-			double t = sw.ElapsedMilliseconds;
-			mainForm.Status = "Time to render "+(t/1000);
+			if (isRendering) { return; }
+			do {
+				restart = false;
+				var sw = new Stopwatch();
+				sw.Start();
+				DoRender();
+				double t = sw.ElapsedMilliseconds;
+				mainForm.Status = "Time to render "+(t/1000);
+			} while(restart);
 		}
 
-		static int itermax = 1000;
 		static double escape = 2.0;
 		static bool isRendering = false;
 		static bool stopRendering = false;
+		static bool restart = false;
+		static int width = 1024;
+		static int height = 1024;
+		static FracConfig config;
+
 		static void DoRender()
 		{
 			if (isRendering) { return; }
 			isRendering = true;
 			stopRendering = false;
-			int divs = 4;
-			int side = 1024;
-			double[,] data = new double[side,side];
-			var pp = Parallel.For(0,divs*divs,(i) => {
-				int w = side/divs;
-				int y = (i / divs)*w;
-				int x = (i % divs)*w;
-				Debug.WriteLine(x+" "+y+" "+w+" "+data.GetHashCode());
-				RenderPart(x,y,w,w,data);
+
+			double[,] data = new double[width,height];
+			var pp = Parallel.For(0,height,(i) => {
+				RenderPart(config,i,width,height,data);
 			});
 
-			//RenderPart(128,128,768,768,data);
-
-			Bitmap img = new Bitmap(side,side,PixelFormat.Format32bppArgb);
+			Bitmap img = new Bitmap(width,height,PixelFormat.Format32bppArgb);
 			var lb = new LockBitmap(img);
 			lb.LockBits();
-			for(int y=0; y<side; y++) {
-				for(int x=0; x<side; x++) {
+			for(int y=0; y<height; y++) {
+				for(int x=0; x<width; x++) {
 					double d = data[x,y];
 					Color c;
 					if (d < 0) {
@@ -96,61 +106,90 @@ namespace RazFractal
 			isRendering = false;
 		}
 
-		static void RenderPart1(int px, int py, int wth, int hth, double[,] data)
+		//static void RenderPart1(int px, int py, int wth, int hth, double[,] data)
+		//{
+		//	//http://www.physics.emory.edu/faculty/weeks//software/mandel.c
+		//	double x,xx,y,cx,cy;
+		//	int iter,hx,hy;
+		//	double magnify=1.0;
+		//	int hxres = data.GetLength(0);
+		//	int hyres = data.GetLength(1);
+		//	double dist;
+
+		//	for(hy=py; hy<py+hth; hy++) {
+		//		for(hx=px; hx<px+wth; hx++) {
+		//			cx = (((double)hx)/((double)hxres)-0.8)/magnify * 3.0;
+		//			cy = (((double)hy)/((double)hyres)-0.5)/magnify * 3.0;
+		//			x = 0.0; y = 0.0;
+
+		//			dist = 0.0;
+		//			for(iter = 0; iter < itermax; iter++) {
+		//				if (stopRendering) { return; }
+		//				xx = x*x-y*y+cx;
+		//				y = 2.0*x*y+cy;
+		//				x = xx;
+		//				dist = x*x+y*y;
+		//				if (dist > escape) { break; }
+		//			}
+		//			//Debug.WriteLine(hx+" "+hy+" "+iter);
+		//			data[hx,hy] = iter;
+		//		}
+		//	}
+		//}
+
+		static void RenderPart(FracConfig conf, int hy, int wth, int hth, double[,] data)
 		{
 			//http://www.physics.emory.edu/faculty/weeks//software/mandel.c
-			double x,xx,y,cx,cy;
-			int iter,hx,hy;
-			double magnify=1.0;
-			int hxres = data.GetLength(0);
-			int hyres = data.GetLength(1);
-			double dist;
-
-			for(hy=py; hy<py+hth; hy++) {
-				for(hx=px; hx<px+wth; hx++) {
-					cx = (((double)hx)/((double)hxres)-0.8)/magnify * 3.0;
-					cy = (((double)hy)/((double)hyres)-0.5)/magnify * 3.0;
-					x = 0.0; y = 0.0;
-
-					dist = 0.0;
-					for(iter = 0; iter < itermax; iter++) {
-						if (stopRendering) { return; }
-						xx = x*x-y*y+cx;
-						y = 2.0*x*y+cy;
-						x = xx;
-						dist = x*x+y*y;
-						if (dist > escape) { break; }
-					}
-					//Debug.WriteLine(hx+" "+hy+" "+iter);
-					data[hx,hy] = iter;
-				}
-			}
-		}
-
-		static void RenderPart(int px, int py, int wth, int hth, double[,] data)
-		{
-			//http://www.physics.emory.edu/faculty/weeks//software/mandel.c
-			int iter,hx,hy;
+			int iter,hx;
 			int itermax = 100;
-			Complex magnify = new Complex(1.0,1.0);
+			double magnify = 1.0;
 			int hxres = data.GetLength(0);
 			int hyres = data.GetLength(1);
 			Complex res = new Complex((double)hxres,(double)hyres);
 
-			for(hy=py; hy<py+hth; hy++) {
-				for(hx=px; hx<px+wth; hx++) {
-					var p = new Complex((double)hx,(double)hy);
-					var c = ((p / res) + new Complex(-0.5,-0.3)) / magnify * new Complex(3.0,3.0);
+			for(hx=0; hx<wth; hx++)
+			{
+				double cx = (((double)hx)/((double)hxres)-0.8)/magnify * 3.0;
+				double cy = (((double)hy)/((double)hyres)-0.5)/magnify * 3.0;
 
-					var z = new Complex(0.0,0.0);
-					for(iter = 0; iter < itermax; iter++) {
-						if (stopRendering) { return; }
-						z = z*z + c;
-						var dist = z.Magnitude;
-						if (dist > escape || double.IsNaN(dist) || double.IsInfinity(dist)) { dist = -1; break; }
-					}
-					data[hx,hy] = iter;
+				Complex c,z;
+				switch(conf.Plane)
+				{
+				case Planes.XY: default:
+					c = new Complex(cx,cy);
+					z = new Complex(conf.X,conf.Y); break;
+				case Planes.XW:
+					c = new Complex(conf.W,cy);
+					z = new Complex(conf.X,cx); break;
+				case Planes.XZ:
+					c = new Complex(cx,conf.Z);
+					z = new Complex(conf.X,cy); break;
+				case Planes.YW:
+					c = new Complex(conf.W,cx);
+					z = new Complex(cy,conf.Y); break;
+				case Planes.YZ:
+					c = new Complex(cx,conf.Z);
+					z = new Complex(cy,conf.Y); break;
+				case Planes.WZ:
+					c = new Complex(conf.W,conf.Z);
+					z = new Complex(cx,cy); break;
 				}
+
+				for(iter = 0; iter < itermax; iter++) {
+					if (stopRendering) { return; }
+					z = z*z + c;
+					var dist = z.Magnitude;
+					if (dist > escape || double.IsNaN(dist) || double.IsInfinity(dist)) { dist = -1; break; }
+				}
+				double index = iter;
+				if (iter < itermax)
+				{
+					//double zn = Math.Sqrt(z.Real*z.Real+z.Imaginary*z.Imaginary);
+					double zn = z.Magnitude;
+					double nu = Math.Log(Math.Log(zn,2),2);
+					index = iter + 1.0 - nu;
+				}
+				data[hx,hy] = index;
 			}
 		}
 	}
