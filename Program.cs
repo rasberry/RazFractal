@@ -79,9 +79,15 @@ namespace RazFractal
 			isRendering = true;
 			stopRendering = false;
 
+			object[,] lockmania = new object[width,height];
+			for(int y=0; y<height; y++) {
+				for(int x=0; x<width; x++) {
+					lockmania[x,y] = new object();
+				}
+			}
 			double[,] data = new double[width,height];
 			var pp = Parallel.For(0,height,(i) => {
-				RenderPart(config,i,width,height,data);
+				RenderPart(config,i,width,height,data,lockmania);
 			});
 
 			Bitmap img = new Bitmap(width,height,PixelFormat.Format32bppArgb);
@@ -137,7 +143,7 @@ namespace RazFractal
 		//	}
 		//}
 
-		static void RenderPart(FracConfig conf, int hy, int wth, int hth, double[,] data)
+		static void RenderPart(FracConfig conf, int hy, int wth, int hth, double[,] data, object[,] lockmania)
 		{
 			//http://www.physics.emory.edu/faculty/weeks//software/mandel.c
 			int iter,hx;
@@ -145,12 +151,14 @@ namespace RazFractal
 			double magnify = 1.0;
 			int hxres = data.GetLength(0);
 			int hyres = data.GetLength(1);
+			double xoff = -0.8;
+			double yoff = -0.5;
 			Complex res = new Complex((double)hxres,(double)hyres);
 
 			for(hx=0; hx<wth; hx++)
 			{
-				double cx = (((double)hx)/((double)hxres)-0.8)/magnify * 3.0;
-				double cy = (((double)hy)/((double)hyres)-0.5)/magnify * 3.0;
+				double cx = WinToWorld(hx, magnify, hxres, xoff);
+				double cy = WinToWorld(hy, magnify, hyres, yoff);
 
 				Complex c,z;
 				switch(conf.Plane)
@@ -177,20 +185,40 @@ namespace RazFractal
 
 				for(iter = 0; iter < itermax; iter++) {
 					if (stopRendering) { return; }
+
+					//z = Complex.Pow(z*z,c*4)+c;
 					z = z*z + c;
+					int bx = WorldToWin(z.Real,magnify,hxres,xoff);
+					int by = WorldToWin(z.Imaginary,magnify,hyres,yoff);
+					if (bx > 0 && bx < wth && by > 0 && by < hth) {
+						lock(lockmania[bx,by]) {
+							data[bx,by]++;
+						}
+					}
+
 					var dist = z.Magnitude;
 					if (dist > escape || double.IsNaN(dist) || double.IsInfinity(dist)) { dist = -1; break; }
 				}
-				double index = iter;
-				if (iter < itermax)
-				{
-					//double zn = Math.Sqrt(z.Real*z.Real+z.Imaginary*z.Imaginary);
-					double zn = z.Magnitude;
-					double nu = Math.Log(Math.Log(zn,2),2);
-					index = iter + 1.0 - nu;
-				}
-				data[hx,hy] = index;
+				////smooth coloring
+				//double index = iter;
+				//if (iter < itermax)
+				//{
+				//	//double zn = Math.Sqrt(z.Real*z.Real+z.Imaginary*z.Imaginary);
+				//	double zn = z.Magnitude;
+				//	double nu = Math.Log(Math.Log(zn,2),2);
+				//	index = iter + 1.0 - nu;
+				//}
+				//data[hx,hy] = index;
 			}
+		}
+
+		static double WinToWorld(int h, double magnify, int res, double offset)
+		{
+			return (((double)h) / ((double)res) + offset) / magnify * 3.0;
+		}
+		static int WorldToWin(double w, double magnify, int res, double offset)
+		{
+			return (int)Math.Round((double)res * (magnify * w - 3.0 * offset) / 3.0);
 		}
 	}
 }
