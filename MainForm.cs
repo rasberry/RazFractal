@@ -17,15 +17,6 @@ namespace RazFractal
 			InitializeComponent();
 		}
 
-		private void exitToolStripMenuItem_Click(object sender, EventArgs e)
-		{
-			if (StopRender != null) {
-				StopRender.Invoke(null,new EventArgs());
-			}
-
-			Application.Exit();
-		}
-
 		public Image FractalImage { get {
 			return pictureBox1.Image;
 		} set {
@@ -33,11 +24,8 @@ namespace RazFractal
 			pictureBox1.Image = value;
 		}}
 
-		public event EventHandler StartRender;
-		public event EventHandler StopRender;
-		public event ConfigChangedEventHandler ConfigChanged;
-
 		public delegate void ConfigChangedEventHandler(object sender, ConfigChangedEventArgs args);
+		public event ConfigChangedEventHandler ConfigChanged;
 
 		public class ConfigChangedEventArgs : EventArgs
 		{
@@ -48,9 +36,33 @@ namespace RazFractal
 			public FracConfig Config { get; private set; }
 		}
 
+		public delegate void ScrollChangedEventHandler(object sender, ScrollChangedEventArgs args);
+		public event ScrollChangedEventHandler ScrollChanged;
+
+		public class ScrollChangedEventArgs : EventArgs
+		{
+			public ScrollChangedEventArgs(Point offset)
+			{
+				Offset = offset;
+			}
+			public Point Offset { get; private set; }
+		}
+
+		public event EventHandler StartRender;
+		public event EventHandler StopRender;
+
 		public string Status {
 			get { return this.toolStripStatusLabel1.Text; }
 			set { this.toolStripStatusLabel1.Text = value; }
+		}
+
+		private void exitToolStripMenuItem_Click(object sender, EventArgs e)
+		{
+			if (StopRender != null) {
+				StopRender.Invoke(null,new EventArgs());
+			}
+
+			Application.Exit();
 		}
 
 		private void testToolStripMenuItem_Click(object sender, EventArgs e)
@@ -130,5 +142,90 @@ namespace RazFractal
 			plane = Planes.WZ;
 			FireConfigChanged();
 		}
+
+		bool isDown = false;
+		bool isFirst = false;
+		Point lastLoc = Point.Empty;
+
+		private void pictureBox1_MouseDown(object sender, MouseEventArgs e)
+		{
+			//Console.WriteLine("m dn "+e.Location);
+			if (e.Button == MouseButtons.Middle) {
+ 				isDown = true;
+				lastLoc = e.Location;
+			}
+		}
+
+		private void pictureBox1_MouseMove(object sender, MouseEventArgs e)
+		{
+			if (isDown) {
+				if (isFirst) {
+					isFirst = false;
+					lastLoc = e.Location;
+					return;
+				}
+				//Console.WriteLine("m move "+e.Location);
+				int dx = lastLoc.X - e.X;
+				int dy = lastLoc.Y - e.Y;
+				lastLoc = e.Location;
+
+				if ((dx != 0 || dy != 0) && ScrollChanged != null)
+				{
+					ScrollChanged.Invoke(this,new ScrollChangedEventArgs(new Point(dx,dy)));
+				}
+			}
+		}
+
+		private void pictureBox1_MouseUp(object sender, MouseEventArgs e)
+		{
+			//Console.WriteLine("m up "+e.Location);
+			if (e.Button == MouseButtons.Middle) {
+ 				isDown = false;
+				lastLoc = e.Location;
+			}
+		}
+
+		//void MoveScroll(int dist, bool keyboard = false)
+		//{
+		//	ScrollChanged
+
+		//	if (sp.Value + dist < sp.Minimum) {
+		//		sp.Value = sp.Minimum;
+		//	}
+		//	else if (sp.Value + dist > sp.Maximum) {
+		//		sp.Value = sp.Maximum;
+		//	}
+		//	else {
+		//		sp.Value += dist;
+		//		isFirst = !keyboard; //setting the scrollbar moves the mouse location so skip the next move event
+		//	}
+		//}
+
+		//private void pictureBox1_PreviewKeyDown(object sender, PreviewKeyDownEventArgs e)
+		//{
+		//	Console.WriteLine("k dn "+e.KeyCode);
+		//	int dx = 0, dy = 0, dist = 0;
+		//	switch(e.KeyCode)
+		//	{
+		//	case Keys.Up:
+		//	case Keys.Down:
+		//		dist = e.Shift ? pictureBox1.HorizontalScroll.LargeChange : pictureBox1.HorizontalScroll.SmallChange;
+		//		break;
+		//	case Keys.Right:
+		//	case Keys.Left:
+		//		dist = e.Shift ? pictureBox1.VerticalScroll.LargeChange : pictureBox1.VerticalScroll.SmallChange;
+		//		break;
+		//	}
+
+		//	switch(e.KeyCode)
+		//	{
+		//	case Keys.Up:		dy = -dist; break;
+		//	case Keys.Left:		dx = -dist; break;
+		//	case Keys.Down:		dy = dist; break;
+		//	case Keys.Right:	dx = dist; break;
+		//	}
+		//	if (dx != 0) { MoveScroll(panel.HorizontalScroll,dx,true); }
+		//	if (dy != 0) { MoveScroll(panel.VerticalScroll,dy,true); }
+		//}
 	}
 }
