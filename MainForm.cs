@@ -19,34 +19,13 @@ namespace RazFractal
 
 		public Image FractalImage { get {
 			return pictureBox1.Image;
-		} set {
-			pictureBox1.Size = value.Size;
-			pictureBox1.Image = value;
 		}}
 
 		public delegate void ConfigChangedEventHandler(object sender, ConfigChangedEventArgs args);
 		public event ConfigChangedEventHandler ConfigChanged;
 
-		public class ConfigChangedEventArgs : EventArgs
-		{
-			public ConfigChangedEventArgs(FracConfig conf)
-			{
-				Config = conf;
-			}
-			public FracConfig Config { get; private set; }
-		}
-
 		public delegate void ScrollChangedEventHandler(object sender, ScrollChangedEventArgs args);
 		public event ScrollChangedEventHandler ScrollChanged;
-
-		public class ScrollChangedEventArgs : EventArgs
-		{
-			public ScrollChangedEventArgs(Point offset)
-			{
-				Offset = offset;
-			}
-			public Point Offset { get; private set; }
-		}
 
 		public event EventHandler StartRender;
 		public event EventHandler StopRender;
@@ -54,6 +33,14 @@ namespace RazFractal
 		public string Status {
 			get { return this.toolStripStatusLabel1.Text; }
 			set { this.toolStripStatusLabel1.Text = value; }
+		}
+
+		public void RenderFinished(object sender, RenderFinishedEventArgs args)
+		{
+			if (args.Image == null) { return; }
+			pictureBox1.Size = args.Image.Size;
+			pictureBox1.Image = args.Image;
+			Status = "Rendered in "+args.TotalSeconds.ToString("0.##")+" seconds";
 		}
 
 		private void exitToolStripMenuItem_Click(object sender, EventArgs e)
